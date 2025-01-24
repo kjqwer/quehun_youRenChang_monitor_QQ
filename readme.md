@@ -95,6 +95,9 @@ python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data 
    - 点击"停止监控"按钮
    - 或直接关闭程序
 
+5. 最终效果
+   ![最终效果](运行图片/设置界面.png)
+
 ## 配置文件说明
 
 `config.py` 包含以下配置项：
