@@ -1,0 +1,9 @@
+paddlepaddle
+paddleocr
+opencv-python
+Pillow>
+numpy
+pywin32
+setuptools>
+# 打包工具（不打包不用）
+pyinstaller
