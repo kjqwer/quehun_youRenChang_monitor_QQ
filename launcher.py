@@ -251,7 +251,14 @@ class MonitorApp:
         saveBitMap.CreateCompatibleBitmap(mfcDC, width, height)
         saveDC.SelectObject(saveBitMap)
         
+        # 修改 PrintWindow 的参数
+        # 这样可以捕获被遮挡或最小化的窗口内容
         result = ctypes.windll.user32.PrintWindow(hwnd, saveDC.GetSafeHdc(), 2)
+        
+        if result == 0:
+            print("截图失败，请检查窗口是否存在")
+            return None
+        
         bmpinfo = saveBitMap.GetInfo()
         bmpstr = saveBitMap.GetBitmapBits(True)
 
