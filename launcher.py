@@ -115,22 +115,22 @@ class SettingsDialog:
             
             # 保存到配置文件
             config_content = f"""# 监控设置
-MONITOR_SETTINGS = {{
-    'window_title': '{MONITOR_SETTINGS["window_title"]}',
-    'scan_interval': {MONITOR_SETTINGS['scan_interval']},
-    'confidence_threshold': {MONITOR_SETTINGS['confidence_threshold']}
-}}
+                    MONITOR_SETTINGS = {{
+                        'window_title': '{MONITOR_SETTINGS["window_title"]}',
+                        'scan_interval': {MONITOR_SETTINGS['scan_interval']},
+                        'confidence_threshold': {MONITOR_SETTINGS['confidence_threshold']}
+                    }}
 
-# OCR设置
-OCR_SETTINGS = {{
-    'use_angle_cls': False,
-    'lang': "ch",
-    'show_log': False
-}}
+                    # OCR设置
+                    OCR_SETTINGS = {{
+                        'use_angle_cls': False,
+                        'lang': "ch",
+                        'show_log': False
+                    }}
 
-# 关键词列表
-KEYWORDS = {KEYWORDS}
-"""
+                    # 关键词列表
+                    KEYWORDS = {KEYWORDS}
+                    """
             with open('config.py', 'w', encoding='utf-8') as f:
                 f.write(config_content)
             
@@ -148,6 +148,9 @@ class MonitorApp:
         self.root = tk.Tk()
         self.root.title("车牌监控程序")
         self.root.geometry("600x400")
+        
+        # 添加关闭窗口的协议处理
+        self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
         
         # 创建主框架
         self.main_frame = ttk.Frame(self.root)
@@ -251,14 +254,7 @@ class MonitorApp:
         saveBitMap.CreateCompatibleBitmap(mfcDC, width, height)
         saveDC.SelectObject(saveBitMap)
         
-        # 修改 PrintWindow 的参数
-        # 这样可以捕获被遮挡或最小化的窗口内容
         result = ctypes.windll.user32.PrintWindow(hwnd, saveDC.GetSafeHdc(), 2)
-        
-        if result == 0:
-            print("截图失败，请检查窗口是否存在")
-            return None
-        
         bmpinfo = saveBitMap.GetInfo()
         bmpstr = saveBitMap.GetBitmapBits(True)
 
@@ -364,7 +360,10 @@ class MonitorApp:
     def show_alert(self, message):
         """显示警告"""
         print(f"触发提醒: {message}")
-        ctypes.windll.user32.MessageBoxW(0, message, "警告", 0x30)
+        # 获取当前程序窗口句柄
+        hwnd = self.root.winfo_id()
+        # 显示置顶的消息框
+        ctypes.windll.user32.MessageBoxW(hwnd, message, "警告", 0x30 | 0x40000)  # MB_ICONWARNING | MB_SETFOREGROUND
 
     def stop_monitor(self):
         """停止监控"""
