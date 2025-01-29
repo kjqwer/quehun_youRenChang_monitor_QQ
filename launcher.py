@@ -42,7 +42,7 @@ class SettingsDialog:
     def __init__(self, parent):
         self.window = tk.Toplevel(parent)
         self.window.title("设置")
-        self.window.geometry("400x500")
+        self.window.geometry("600x600")
         
         # 创建notebook用于分页
         self.notebook = ttk.Notebook(self.window)
@@ -88,6 +88,61 @@ class SettingsDialog:
         ttk.Button(self.keyword_frame, text="删除", 
                   command=self.delete_keyword).pack(side=tk.LEFT)
         
+        # 规则设置页面
+        self.rules_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.rules_frame, text="规则设置")
+        
+        # 数字模式设置
+        ttk.Label(self.rules_frame, text="数字模式:").pack(pady=5)
+        self.number_patterns_list = tk.Listbox(self.rules_frame, height=5)
+        self.number_patterns_list.pack(fill=tk.X, padx=5)
+        for pattern in RULES['number_patterns']:
+            self.number_patterns_list.insert(tk.END, pattern)
+            
+        # 数字模式操作按钮
+        self.number_pattern_frame = ttk.Frame(self.rules_frame)
+        self.number_pattern_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.number_pattern_entry = ttk.Entry(self.number_pattern_frame)
+        self.number_pattern_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(self.number_pattern_frame, text="添加", 
+                  command=lambda: self.add_pattern('number')).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.number_pattern_frame, text="删除",
+                  command=lambda: self.delete_pattern('number')).pack(side=tk.LEFT)
+        
+        # 自定义正则设置
+        ttk.Label(self.rules_frame, text="自定义正则:").pack(pady=5)
+        self.custom_patterns_list = tk.Listbox(self.rules_frame, height=5)
+        self.custom_patterns_list.pack(fill=tk.X, padx=5)
+        for pattern in RULES['custom_patterns']:
+            self.custom_patterns_list.insert(tk.END, pattern)
+            
+        # 自定义正则操作按钮
+        self.custom_pattern_frame = ttk.Frame(self.rules_frame)
+        self.custom_pattern_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.custom_pattern_entry = ttk.Entry(self.custom_pattern_frame)
+        self.custom_pattern_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(self.custom_pattern_frame, text="添加",
+                  command=lambda: self.add_pattern('custom')).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.custom_pattern_frame, text="删除",
+                  command=lambda: self.delete_pattern('custom')).pack(side=tk.LEFT)
+        
+        # 排除规则设置
+        ttk.Label(self.rules_frame, text="排除规则:").pack(pady=5)
+        self.exclude_patterns_list = tk.Listbox(self.rules_frame, height=5)
+        self.exclude_patterns_list.pack(fill=tk.X, padx=5)
+        for pattern in RULES['exclude_patterns']:
+            self.exclude_patterns_list.insert(tk.END, pattern)
+            
+        # 排除规则操作按钮
+        self.exclude_pattern_frame = ttk.Frame(self.rules_frame)
+        self.exclude_pattern_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.exclude_pattern_entry = ttk.Entry(self.exclude_pattern_frame)
+        self.exclude_pattern_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(self.exclude_pattern_frame, text="添加",
+                  command=lambda: self.add_pattern('exclude')).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.exclude_pattern_frame, text="删除",
+                  command=lambda: self.delete_pattern('exclude')).pack(side=tk.LEFT)
+        
         # 保存按钮
         ttk.Button(self.window, text="保存设置", 
                   command=self.save_settings).pack(pady=10)
@@ -103,33 +158,64 @@ class SettingsDialog:
         if selection:
             self.keywords_list.delete(selection)
     
+    def add_pattern(self, pattern_type):
+        entry_map = {
+            'number': self.number_pattern_entry,
+            'custom': self.custom_pattern_entry,
+            'exclude': self.exclude_pattern_entry
+        }
+        list_map = {
+            'number': self.number_patterns_list,
+            'custom': self.custom_patterns_list,
+            'exclude': self.exclude_patterns_list
+        }
+        
+        entry = entry_map[pattern_type]
+        listbox = list_map[pattern_type]
+        
+        pattern = entry.get().strip()
+        if pattern and pattern not in listbox.get(0, tk.END):
+            try:
+                # 测试正则表达式是否有效
+                re.compile(pattern)
+                listbox.insert(tk.END, pattern)
+                entry.delete(0, tk.END)
+            except re.error:
+                messagebox.showerror("错误", "无效的正则表达式")
+
+    def delete_pattern(self, pattern_type):
+        list_map = {
+            'number': self.number_patterns_list,
+            'custom': self.custom_patterns_list,
+            'exclude': self.exclude_patterns_list
+        }
+        listbox = list_map[pattern_type]
+        selection = listbox.curselection()
+        if selection:
+            listbox.delete(selection)
+
     def save_settings(self):
         try:
             # 更新MONITOR_SETTINGS
             MONITOR_SETTINGS['scan_interval'] = float(self.scan_interval.get())
             MONITOR_SETTINGS['confidence_threshold'] = float(self.confidence.get())
             
-            # 更新KEYWORDS
-            global KEYWORDS
-            KEYWORDS = list(self.keywords_list.get(0, tk.END))
+            # 更新RULES
+            global RULES
+            RULES['number_patterns'] = list(self.number_patterns_list.get(0, tk.END))
+            RULES['custom_patterns'] = list(self.custom_patterns_list.get(0, tk.END))
+            RULES['exclude_patterns'] = list(self.exclude_patterns_list.get(0, tk.END))
+            RULES['keywords'] = list(self.keywords_list.get(0, tk.END))
             
             # 保存到配置文件
             config_content = f"""# 监控设置
-                    MONITOR_SETTINGS = {{
-                        'window_title': '{MONITOR_SETTINGS["window_title"]}',
-                        'scan_interval': {MONITOR_SETTINGS['scan_interval']},
-                        'confidence_threshold': {MONITOR_SETTINGS['confidence_threshold']}
-                    }}
+                    MONITOR_SETTINGS = {MONITOR_SETTINGS}
 
                     # OCR设置
-                    OCR_SETTINGS = {{
-                        'use_angle_cls': False,
-                        'lang': "ch",
-                        'show_log': False
-                    }}
+                    OCR_SETTINGS = {OCR_SETTINGS}
 
-                    # 关键词列表
-                    KEYWORDS = {KEYWORDS}
+                    # 规则设置
+                    RULES = {RULES}
                     """
             with open('config.py', 'w', encoding='utf-8') as f:
                 f.write(config_content)
@@ -338,20 +424,37 @@ class MonitorApp:
         lines = text.splitlines()
         
         for line in lines:
-            # 匹配5位数字的车牌
-            number_match = re.search(r'\b\d{5}\b', line)
-            if number_match:
-                number = number_match.group()
-                message = f"发现车牌: {number}"
-                if message not in self.alerted_messages:
-                    self.show_alert(message)
-                    self.alerted_messages.add(message)
-                    return
+            # 首先检查是否命中排除规则
+            should_exclude = any(re.search(pattern, line) for pattern in RULES['exclude_patterns'])
+            if should_exclude:
+                continue
+                
+            # 检查数字模式
+            for pattern in RULES['number_patterns']:
+                matches = re.finditer(pattern, line)
+                for match in matches:
+                    number = match.group()
+                    message = f"发现车牌: {number}"
+                    if message not in self.alerted_messages:
+                        self.show_alert(message)
+                        self.alerted_messages.add(message)
+                        return
+            
+            # 检查自定义正则
+            for pattern in RULES['custom_patterns']:
+                matches = re.finditer(pattern, line)
+                for match in matches:
+                    found = match.group()
+                    message = f"匹配自定义规则: {found}"
+                    if message not in self.alerted_messages:
+                        self.show_alert(message)
+                        self.alerted_messages.add(message)
+                        return
                     
             # 关键词匹配
-            for keyword in KEYWORDS:
+            for keyword in RULES['keywords']:
                 if keyword in line:
-                    message = f"发现车车: {line}"
+                    message = f"发现关键词: {line}"
                     if message not in self.alerted_messages:
                         self.show_alert(message)
                         self.alerted_messages.add(message)
