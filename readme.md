@@ -96,7 +96,6 @@ python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data 
    - 发现目标内容时会弹窗提醒
 
    ![主界面](运行图片/主界面.png)
-   ![监控中](运行图片/监控中.png)
 
 3. 设置选项
    - 点击"设置"按钮可以：
