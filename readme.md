@@ -24,6 +24,17 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+其实核心依赖就这几个，也可以直接安装：
+```bash
+pip install paddlepaddle
+pip install "paddleocr>=2.0.1"
+pip install pillow
+pip install opencv-python
+pip install pywin32
+```
+
+如果安装过程中遇到问题，可以尝试先安装这些核心包，程序也能正常运行。其他依赖包会在安装这些核心包时自动安装。
+
 ## 使用方法
 
 ### 方式一：脚本启动
@@ -57,11 +68,15 @@ python launcher.py
 # 激活虚拟环境
 .venv\Scripts\activate
 
+# 安装打包工具
+pip install PyInstaller
+
 # 打包命令
 python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data "quehun.ico;." --add-data ".venv\Lib\site-packages\paddle\libs\*.dll;paddle\libs" --add-data ".venv\Lib\site-packages\paddleocr;paddleocr" --hidden-import paddleocr --hidden-import PIL --hidden-import cv2 --hidden-import win32gui --hidden-import win32ui --hidden-import win32con --hidden-import numpy --collect-all paddleocr --collect-all paddle --noconsole --icon=quehun.ico launcher.py
 ```
 
-2. 运行打包后的程序
+
+1. 运行打包后的程序
 - 打包完成后，在 `dist/车牌监控` 目录下找到 `车牌监控.exe`
 - 双击运行即可
 
