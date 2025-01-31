@@ -73,7 +73,7 @@ class SettingsDialog:
         self.keywords_list.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # 添加现有关键词
-        for keyword in KEYWORDS:
+        for keyword in RULES['keywords']:  # 从RULES中获取关键词
             self.keywords_list.insert(tk.END, keyword)
         
         # 关键词操作按钮
@@ -207,16 +207,19 @@ class SettingsDialog:
             RULES['exclude_patterns'] = list(self.exclude_patterns_list.get(0, tk.END))
             RULES['keywords'] = list(self.keywords_list.get(0, tk.END))
             
-            # 保存到配置文件
+            # 保存到配置文件，注意去掉多余的缩进
             config_content = f"""# 监控设置
-                    MONITOR_SETTINGS = {MONITOR_SETTINGS}
+MONITOR_SETTINGS = {MONITOR_SETTINGS}
 
-                    # OCR设置
-                    OCR_SETTINGS = {OCR_SETTINGS}
+# OCR设置
+OCR_SETTINGS = {OCR_SETTINGS}
 
-                    # 规则设置
-                    RULES = {RULES}
-                    """
+# 规则设置
+RULES = {RULES}
+
+# 保存裁剪区域的文件
+CROP_AREA_FILE = 'last_crop_area.txt'"""
+            
             with open('config.py', 'w', encoding='utf-8') as f:
                 f.write(config_content)
             
@@ -226,6 +229,76 @@ class SettingsDialog:
         except ValueError as e:
             messagebox.showerror("错误", "请输入有效的数值")
 
+class AlertHistoryDialog:
+    def __init__(self, parent):
+        self.parent = parent  # 保存父窗口引用
+        self.window = tk.Toplevel(parent)
+        self.window.title("已识别记录")
+        self.window.geometry("500x400")
+        
+        # 创建列表框显示已识别内容
+        self.history_frame = ttk.Frame(self.window)
+        self.history_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        ttk.Label(self.history_frame, text="已识别内容列表:").pack(pady=5)
+        self.history_list = tk.Listbox(self.history_frame, height=15)
+        self.history_list.pack(fill=tk.BOTH, expand=True, padx=5)
+        
+        # 添加滚动条
+        scrollbar = ttk.Scrollbar(self.history_list)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.history_list.config(yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.history_list.yview)
+        
+        # 添加操作按钮框架
+        self.button_frame = ttk.Frame(self.window)
+        self.button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # 添加新记录输入框和按钮
+        self.entry_frame = ttk.Frame(self.button_frame)
+        self.entry_frame.pack(fill=tk.X, pady=5)
+        self.new_entry = ttk.Entry(self.entry_frame)
+        self.new_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        ttk.Button(self.entry_frame, text="添加", 
+                  command=self.add_history).pack(side=tk.RIGHT)
+        
+        # 删除和清空按钮
+        ttk.Button(self.button_frame, text="删除选中", 
+                  command=self.delete_selected).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame, text="清空所有", 
+                  command=self.clear_all).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame, text="保存", 
+                  command=self.save_changes).pack(side=tk.RIGHT, padx=5)
+        
+        # 修改加载现有记录的方式
+        self.load_history(self.parent.app.alerted_messages)  # 通过app访问alerted_messages
+        
+    def load_history(self, history_set):
+        self.history_list.delete(0, tk.END)
+        for item in sorted(history_set):
+            self.history_list.insert(tk.END, item)
+    
+    def add_history(self):
+        new_item = self.new_entry.get().strip()
+        if new_item and new_item not in self.history_list.get(0, tk.END):
+            self.history_list.insert(tk.END, new_item)
+            self.new_entry.delete(0, tk.END)
+    
+    def delete_selected(self):
+        selection = self.history_list.curselection()
+        if selection:
+            self.history_list.delete(selection)
+    
+    def clear_all(self):
+        if messagebox.askyesno("确认", "确定要清空所有记录吗？"):
+            self.history_list.delete(0, tk.END)
+    
+    def save_changes(self):
+        new_history = set(self.history_list.get(0, tk.END))
+        self.parent.app.alerted_messages = new_history  # 通过app保存更改
+        messagebox.showinfo("成功", "更改已保存")
+        self.window.destroy()
+
 class MonitorApp:
     def __init__(self):
         # 保存原始的stdout
@@ -234,6 +307,9 @@ class MonitorApp:
         self.root = tk.Tk()
         self.root.title("车牌监控程序")
         self.root.geometry("600x400")
+        
+        # 将app引用保存到root中
+        self.root.app = self
         
         # 添加关闭窗口的协议处理
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
@@ -258,6 +334,7 @@ class MonitorApp:
         ttk.Button(self.button_frame, text="开始监控", command=self.start_monitor).pack(side=tk.LEFT, padx=5)
         ttk.Button(self.button_frame, text="停止监控", command=self.stop_monitor).pack(side=tk.LEFT, padx=5)
         ttk.Button(self.button_frame, text="设置", command=self.show_settings).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame, text="识别记录", command=self.show_alert_history).pack(side=tk.LEFT, padx=5)
         ttk.Button(self.button_frame, text="退出程序", command=self.quit_app).pack(side=tk.RIGHT, padx=5)
         
         # 初始化变量
@@ -424,36 +501,33 @@ class MonitorApp:
         lines = text.splitlines()
         
         for line in lines:
-            # 首先检查是否命中排除规则
-            should_exclude = any(re.search(pattern, line) for pattern in RULES['exclude_patterns'])
-            if should_exclude:
-                continue
-                
+            # print(f"正在检查行: '{line}'")  # 调试信息
+            
             # 检查数字模式
             for pattern in RULES['number_patterns']:
                 matches = re.finditer(pattern, line)
                 for match in matches:
                     number = match.group()
-                    message = f"发现车牌: {number}"
-                    if message not in self.alerted_messages:
-                        self.show_alert(message)
-                        self.alerted_messages.add(message)
-                        return
-            
-            # 检查自定义正则
-            for pattern in RULES['custom_patterns']:
-                matches = re.finditer(pattern, line)
-                for match in matches:
-                    found = match.group()
-                    message = f"匹配自定义规则: {found}"
-                    if message not in self.alerted_messages:
-                        self.show_alert(message)
-                        self.alerted_messages.add(message)
-                        return
+                    # 检查这个数字是否被排除规则排除
+                    should_exclude = False
+                    for exclude_pattern in RULES['exclude_patterns']:
+                        if re.search(exclude_pattern, number):
+                            # print(f"  - 数字 '{number}' 被规则 '{exclude_pattern}' 排除")
+                            should_exclude = True
+                            break
                     
-            # 关键词匹配
+                    if not should_exclude:
+                        # print(f"  + 找到匹配: '{number}'")
+                        message = f"发现车牌: {number}"
+                        if message not in self.alerted_messages:
+                            self.show_alert(message)
+                            self.alerted_messages.add(message)
+                            return
+            
+            # 检查关键词
             for keyword in RULES['keywords']:
                 if keyword in line:
+                    # print(f"  + 找到关键词: '{keyword}'")  # 调试信息
                     message = f"发现关键词: {line}"
                     if message not in self.alerted_messages:
                         self.show_alert(message)
@@ -484,6 +558,10 @@ class MonitorApp:
     def show_settings(self):
         """显示设置对话框"""
         SettingsDialog(self.root)
+
+    def show_alert_history(self):
+        """显示已识别记录对话框"""
+        AlertHistoryDialog(self.root)
 
     def run(self):
         """运行程序"""
