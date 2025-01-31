@@ -29,7 +29,6 @@ RULES = {
     ],
     'exclude_patterns': [
         r'\d+[=＝]+\d+',  # 排除等式
-        r'[a-zA-Z\u4e00-\u9fff]\d+[a-zA-Z\u4e00-\u9fff]',  # 排除被字母或汉字完全包围的数字
     ]
 }
 
