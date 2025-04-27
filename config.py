@@ -8,6 +8,7 @@ MONITOR_SETTINGS = {
 }
 
 
+
 # OCR设置
 OCR_SETTINGS = {
     'use_angle_cls': False,
