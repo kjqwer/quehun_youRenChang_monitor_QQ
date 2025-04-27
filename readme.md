@@ -44,7 +44,7 @@ pip install psutil
 .venv\Scripts\activate
 
 # 运行启动器
-python launcher.py
+python main.py
 ```
 
 #### 打包使用
@@ -118,7 +118,7 @@ python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data 
 - 首次运行时需要下载OCR模型文件
 - 建议使用虚拟环境运行程序
 - gpu设置支持需要修改环境重新打包（改为安装paddlepaddle-gpu）
-- QQ高版本需要禁止gpu，不然不能监控，可以使用快捷方式修改如下图（前面是你的QQ路径）（"E:\Program Files (x86)\Tencent\QQNT\QQ.exe" --disable-gpu）
+- QQ高版本需要禁止gpu，不然不能监控（~~天知道为什么一个聊天软件需要gpu~~），可以使用快捷方式修改如下图（前面是你的QQ路径）（"E:\Program Files (x86)\Tencent\QQNT\QQ.exe" --disable-gpu）
 - ![QQ](运行图片/qq设置.png)
 
 
