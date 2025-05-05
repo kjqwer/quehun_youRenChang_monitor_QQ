@@ -20,7 +20,7 @@ class OCRProcessor:
     def initialize(self):
         """初始化OCR引擎"""
         if self.ocr is not None:
-            return
+            return True
             
         try:
             print("初始化OCR引擎...")

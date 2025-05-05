@@ -66,8 +66,8 @@ python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data 
 - 双击运行即可
 
 2. 下载我提供打包好的程序（包有点大是因为包含了模型文件）
--  度盘:链接：https://pan.baidu.com/s/1qg5VtNSs7giQkyKBdLcXuw?pwd=sdxl 
--  提取码：sdxl 
+-  度盘:链接：https://pan.baidu.com/s/1EYT5z5Jx_5N2zox3Lq7u4w?pwd=bbky 
+-  提取码：bbky 
 
 ## 使用说明
 

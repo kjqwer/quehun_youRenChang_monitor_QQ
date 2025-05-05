@@ -1,6 +1,6 @@
 # 监控设置
 MONITOR_SETTINGS = {
-    'window_title': 'QQ',
+    'window_title': '立直荣断幺九',
     'scan_interval': 1.0,
     'confidence_threshold': 0.8,
     'memory_cleanup_interval': 30,  # 每30次循环清理一次内存

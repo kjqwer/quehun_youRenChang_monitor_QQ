@@ -311,6 +311,8 @@ CPU使用率: {system_info['cpu_percent']}%
         """停止监控"""
         self.monitoring = False
         print("监控已停止")
+        # 释放OCR资源
+        self.ocr_processor.release()
         # 主动清理内存
         gc.collect()
 
@@ -318,8 +320,6 @@ CPU使用率: {system_info['cpu_percent']}%
         """退出程序"""
         if messagebox.askokcancel("确认退出", "确定要退出程序吗？"):
             self.stop_monitor()
-            # 释放OCR资源
-            self.ocr_processor.release()
             # 恢复原始的stdout
             sys.stdout = self.original_stdout
             # 清理内存
