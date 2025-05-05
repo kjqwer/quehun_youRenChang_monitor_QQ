@@ -61,12 +61,12 @@ python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data 
 ```
 
 
-1. 运行打包后的程序
+2. 运行打包后的程序
 - 打包完成后，在 `dist/车牌监控` 目录下找到 `车牌监控.exe`
 - 双击运行即可
 
-2. 下载我提供打包好的程序（包有点大是因为包含了模型文件）
--  度盘:链接：https://pan.baidu.com/s/1EYT5z5Jx_5N2zox3Lq7u4w?pwd=bbky 
+3. 或者下载我提供打包好的程序（包有点大是因为包含了模型文件）
+-  度盘:https://pan.baidu.com/s/1EYT5z5Jx_5N2zox3Lq7u4w?pwd=bbky 
 -  提取码：bbky 
 
 ## 使用说明
