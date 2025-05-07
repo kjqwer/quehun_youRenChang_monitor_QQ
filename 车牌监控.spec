@@ -3,10 +3,12 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('config.py', '.'), ('quehun.ico', '.'), ('utils.py', '.'), ('gui', 'gui'), ('monitor', 'monitor'), ('ocr', 'ocr'), ('.venv\\Lib\\site-packages\\paddle\\libs\\*.dll', 'paddle\\libs'), ('.venv\\Lib\\site-packages\\paddleocr', 'paddleocr')]
 binaries = []
-hiddenimports = ['paddleocr', 'PIL', 'cv2', 'win32gui', 'win32ui', 'win32con', 'numpy', 'psutil']
+hiddenimports = ['paddleocr', 'PIL', 'cv2', 'win32gui', 'win32ui', 'win32con', 'numpy', 'psutil', 'comtypes', 'comtypes.client', 'time']
 tmp_ret = collect_all('paddleocr')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('paddle')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('comtypes')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 

@@ -53,6 +53,17 @@ class SettingsDialog:
         self.confidence.insert(0, str(self.monitor_settings['confidence_threshold']))
         self.confidence.pack(pady=5)
         
+        # 捕获模式设置
+        ttk.Label(self.basic_frame, text="捕获模式:").pack(pady=5)
+        self.capture_mode_frame = ttk.Frame(self.basic_frame)
+        self.capture_mode_frame.pack(pady=5)
+        
+        self.use_background_capture_var = tk.BooleanVar(value=self.monitor_settings.get('use_background_capture', True))
+        ttk.Radiobutton(self.capture_mode_frame, text="背景模式（无需窗口置顶）", 
+                        variable=self.use_background_capture_var, value=True).pack(anchor=tk.W)
+        ttk.Radiobutton(self.capture_mode_frame, text="前台模式（需要窗口置顶）", 
+                        variable=self.use_background_capture_var, value=False).pack(anchor=tk.W)
+        
         # 性能设置
         ttk.Label(self.basic_frame, text="内存清理间隔(次数):").pack(pady=5)
         self.memory_cleanup_interval = ttk.Entry(self.basic_frame)
@@ -221,6 +232,7 @@ class SettingsDialog:
             self.monitor_settings['confidence_threshold'] = float(self.confidence.get())
             self.monitor_settings['memory_cleanup_interval'] = int(self.memory_cleanup_interval.get())
             self.monitor_settings['max_log_lines'] = int(self.max_log_lines.get())
+            self.monitor_settings['use_background_capture'] = self.use_background_capture_var.get()
             
             # 更新OCR_SETTINGS
             self.ocr_settings['use_gpu'] = self.use_gpu_var.get()

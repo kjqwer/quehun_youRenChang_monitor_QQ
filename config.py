@@ -1,10 +1,11 @@
 # 监控设置
 MONITOR_SETTINGS = {
-    'window_title': '立直荣断幺九',
+    'window_title': '小小诗',
     'scan_interval': 1.0,
     'confidence_threshold': 0.8,
     'memory_cleanup_interval': 30,  # 每30次循环清理一次内存
-    'max_log_lines': 500  # 日志最大行数
+    'max_log_lines': 500,  # 日志最大行数
+    'use_background_capture': True  # 使用背景捕获模式（无需窗口置顶）
 }
 
 

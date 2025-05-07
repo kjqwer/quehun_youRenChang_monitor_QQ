@@ -6,6 +6,7 @@ import ctypes
 import time
 import gc
 import traceback
+import win32gui
 
 # 导入配置
 from config import MONITOR_SETTINGS, OCR_SETTINGS, RULES, CROP_AREA_FILE
@@ -53,23 +54,32 @@ class MonitorApp:
         # 设置日志最大行数
         sys.stdout.max_lines = MONITOR_SETTINGS.get('max_log_lines', 500)
         
-        # 创建按钮框架
-        self.button_frame = ttk.Frame(self.main_frame)
-        self.button_frame.pack(fill=tk.X, pady=5)
+        # 创建按钮框架 - 分成两行
+        self.button_frame1 = ttk.Frame(self.main_frame)
+        self.button_frame1.pack(fill=tk.X, pady=(5, 2))
         
-        # 创建按钮
-        ttk.Button(self.button_frame, text="选择监控窗口", command=self.select_window).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="开始监控", command=self.start_monitor).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="停止监控", command=self.stop_monitor).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="设置", command=self.show_settings).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="识别记录", command=self.show_alert_history).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="清理内存", command=self.clean_memory).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="系统信息", command=self.show_system_info).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="退出程序", command=self.quit_app).pack(side=tk.RIGHT, padx=5)
+        self.button_frame2 = ttk.Frame(self.main_frame)
+        self.button_frame2.pack(fill=tk.X, pady=(2, 5))
+        
+        # 第一行按钮 - 主要操作按钮
+        ttk.Button(self.button_frame1, text="选择监控窗口", command=self.select_window).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame1, text="切换窗口置顶", command=self.toggle_window_topmost).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame1, text="开始监控", command=self.start_monitor).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame1, text="停止监控", command=self.stop_monitor).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame1, text="设置", command=self.show_settings).pack(side=tk.LEFT, padx=5)
+        
+        # 第二行按钮 - 辅助功能按钮
+        ttk.Button(self.button_frame2, text="识别记录", command=self.show_alert_history).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame2, text="切换捕获模式", command=self.toggle_capture_mode).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame2, text="清理内存", command=self.clean_memory).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame2, text="系统信息", command=self.show_system_info).pack(side=tk.LEFT, padx=5)
+        ttk.Button(self.button_frame2, text="退出程序", command=self.quit_app).pack(side=tk.RIGHT, padx=5)
         
         # 初始化模块
         self.window_capture = WindowCapture()
         self.window_capture.crop_area_file = CROP_AREA_FILE
+        # 设置捕获模式
+        self.window_capture.use_background_capture = MONITOR_SETTINGS.get('use_background_capture', True)
         self.text_analyzer = TextAnalyzer(RULES)
         self.ocr_processor = OCRProcessor(OCR_SETTINGS, MONITOR_SETTINGS['confidence_threshold'])
         
@@ -85,12 +95,7 @@ class MonitorApp:
         print("-" * 30)
         self.print_system_info()
         print("-" * 30)
-        print("当前配置:")
-        print(f"  扫描间隔: {MONITOR_SETTINGS['scan_interval']}秒")
-        print(f"  置信度阈值: {MONITOR_SETTINGS['confidence_threshold']}")
-        print(f"  内存清理间隔: 每{MONITOR_SETTINGS.get('memory_cleanup_interval', 30)}次扫描")
-        print(f"  使用GPU: {'是' if OCR_SETTINGS.get('use_gpu', False) else '否'}")
-        print(f"  使用MKL加速: {'是' if OCR_SETTINGS.get('enable_mkldnn', True) else '否'}")
+        self.print_config_info()
         print("-" * 30)
         print("请选择要监控的窗口...")
         
@@ -162,7 +167,8 @@ CPU使用率: {system_info['cpu_percent']}%
             print(f"监控系统资源时出错: {str(e)}")
         finally:
             # 继续定期监控
-            self.root.after(60000, self.start_system_monitor)  # 60秒后再次调用
+            if hasattr(self, 'root') and self.root:  # 确保root仍然存在
+                self.root.after(60000, self.start_system_monitor)  # 60秒后再次调用
     
     def clean_memory(self):
         """主动清理内存"""
@@ -201,6 +207,10 @@ CPU使用率: {system_info['cpu_percent']}%
                 window_title = windows[index][0]
                 self.window_capture.selected_window = windows[index][1]
                 print(f"已选择窗口: {window_title}")
+                
+                # 显示窗口置顶状态
+                is_topmost = self.window_capture.is_window_topmost(self.window_capture.selected_window)
+                print(f"窗口置顶状态: {'是' if is_topmost else '否'}")
                 
                 # 保存窗口标题到配置
                 MONITOR_SETTINGS['window_title'] = window_title
@@ -328,11 +338,99 @@ CPU使用率: {system_info['cpu_percent']}%
 
     def show_settings(self):
         """显示设置对话框"""
-        SettingsDialog(self.root, MONITOR_SETTINGS, OCR_SETTINGS, RULES)
+        settings_dialog = SettingsDialog(self.root, MONITOR_SETTINGS, OCR_SETTINGS, RULES)
+        # 等待设置对话框关闭
+        self.root.wait_window(settings_dialog.window)
+        # 更新捕获模式
+        self.window_capture.use_background_capture = MONITOR_SETTINGS.get('use_background_capture', True)
+        # 更新日志最大行数
+        sys.stdout.max_lines = MONITOR_SETTINGS.get('max_log_lines', 500)
 
     def show_alert_history(self):
         """显示已识别记录对话框"""
         AlertHistoryDialog(self.root, self.text_analyzer)
+
+    def toggle_capture_mode(self):
+        """切换捕获模式"""
+        if self.monitoring:
+            messagebox.showwarning("警告", "请先停止监控再切换捕获模式")
+            return
+            
+        mode = self.window_capture.toggle_capture_mode()
+        mode_text = "背景模式（无需窗口置顶）" if mode else "前台模式（需要窗口置顶）"
+        
+        # 检查窗口置顶状态
+        window_topmost_warning = ""
+        if self.window_capture.selected_window and win32gui.IsWindow(self.window_capture.selected_window):
+            is_topmost = self.window_capture.is_window_topmost(self.window_capture.selected_window)
+            if not mode and not is_topmost:
+                window_topmost_warning = "\n\n注意：当前选择的窗口未置顶！在前台模式下，未置顶的窗口可能无法正确捕获。建议点击\"切换窗口置顶\"按钮来置顶监控窗口。"
+            elif mode and is_topmost:
+                window_topmost_warning = "\n\n提示：您已切换到背景模式，但当前窗口仍然处于置顶状态。在背景模式下，您可以取消窗口置顶，不会影响监控效果。"
+        
+        info = f"""已切换到{mode_text}
+
+背景模式说明：
+- 可以监控被覆盖或后台的窗口
+- 使用多种技术尝试获取窗口实际内容
+- 适用于大多数应用程序
+
+前台模式说明：
+- 需要监控窗口处于最前面（置顶）
+- 稳定性更好，但使用不太方便
+- 适用于所有类型的窗口
+
+如果背景模式不能正确捕获某些应用，请尝试切换到前台模式。{window_topmost_warning}"""
+        
+        messagebox.showinfo("切换捕获模式", info)
+        
+        # 更新配置信息
+        self.print_config_info()
+
+    def toggle_window_topmost(self):
+        """切换监控窗口的置顶状态"""
+        if not self.window_capture.selected_window:
+            messagebox.showwarning("警告", "请先选择监控窗口")
+            return
+        
+        try:
+            # 获取当前窗口标题
+            window_title = win32gui.GetWindowText(self.window_capture.selected_window)
+            
+            # 检查窗口是否存在
+            if not win32gui.IsWindow(self.window_capture.selected_window):
+                messagebox.showerror("错误", "所选窗口已关闭或不可用")
+                return
+                
+            # 切换窗口置顶状态
+            is_topmost = self.window_capture.toggle_window_topmost(self.window_capture.selected_window)
+            
+            # 显示结果
+            status = "已置顶" if is_topmost else "已取消置顶"
+            messagebox.showinfo("窗口置顶状态", f"窗口 \"{window_title}\" {status}")
+            
+            # 更新配置信息显示
+            self.print_config_info()
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"切换窗口置顶状态失败: {str(e)}")
+
+    def print_config_info(self):
+        """打印配置信息"""
+        print("当前配置:")
+        print(f"  扫描间隔: {MONITOR_SETTINGS['scan_interval']}秒")
+        print(f"  置信度阈值: {MONITOR_SETTINGS['confidence_threshold']}")
+        print(f"  内存清理间隔: 每{MONITOR_SETTINGS.get('memory_cleanup_interval', 30)}次扫描")
+        print(f"  使用GPU: {'是' if OCR_SETTINGS.get('use_gpu', False) else '否'}")
+        print(f"  使用MKL加速: {'是' if OCR_SETTINGS.get('enable_mkldnn', True) else '否'}")
+        print(f"  捕获模式: {'背景模式（无需窗口置顶）' if self.window_capture.use_background_capture else '前台模式（需要窗口置顶）'}")
+        
+        # 显示窗口置顶状态
+        if self.window_capture.selected_window and win32gui.IsWindow(self.window_capture.selected_window):
+            is_topmost = self.window_capture.is_window_topmost(self.window_capture.selected_window)
+            window_title = win32gui.GetWindowText(self.window_capture.selected_window)
+            print(f"  监控窗口: {window_title}")
+            print(f"  窗口置顶: {'是' if is_topmost else '否'}")
 
     def run(self):
         """运行程序"""
