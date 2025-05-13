@@ -8,8 +8,89 @@ import gc
 import traceback
 import win32gui
 
-# 导入配置
-from config import MONITOR_SETTINGS, OCR_SETTINGS, RULES, CROP_AREA_FILE
+# 添加资源路径处理函数
+def resource_path(relative_path):
+    """获取资源的绝对路径，适用于开发环境和PyInstaller打包后的环境
+    
+    说明：
+    1. PyInstaller打包后，程序运行在临时目录中，需要使用此函数处理资源路径
+    2. 如果找到_MEIPASS属性，说明是打包后的环境，使用_MEIPASS作为基础路径
+    3. 否则使用当前目录作为基础路径
+    """
+    try:
+        # PyInstaller创建临时文件夹，将路径存储在_MEIPASS中
+        base_path = sys._MEIPASS
+    except Exception:
+        # 如果不是通过PyInstaller打包，返回当前目录
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
+# 获取应用程序目录 - 这是关键，确保配置文件使用正确的路径
+# 打包后，sys.argv[0]是可执行文件的完整路径，这样可以得到它所在的目录
+APP_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
+# 配置文件路径 - 存放在应用程序目录下，而不是临时目录
+CONFIG_FILE = os.path.join(APP_DIR, 'config.py')
+# 裁剪区域文件路径 - 同样存放在应用程序目录下
+CROP_AREA_FILE_PATH = os.path.join(APP_DIR, 'last_crop_area.txt')
+
+# 尝试导入配置，如果失败则创建默认配置
+try:
+    # 导入配置
+    from config import MONITOR_SETTINGS, OCR_SETTINGS, RULES, CROP_AREA_FILE
+except ImportError:
+    print("配置文件不存在，将创建默认配置")
+    # 默认监控设置
+    MONITOR_SETTINGS = {
+        'window_title': '',
+        'scan_interval': 1.0,
+        'confidence_threshold': 0.8,
+        'memory_cleanup_interval': 30,
+        'max_log_lines': 500,
+        'use_background_capture': True,
+        'memory_threshold': 1500,
+        'auto_reset_enabled': True
+    }
+    
+    # 默认OCR设置
+    OCR_SETTINGS = {
+        'use_angle_cls': False,
+        'lang': 'ch',
+        'show_log': False,
+        'use_gpu': False,
+        'enable_mkldnn': True,
+        'cls_model_dir': None,
+        'rec_char_dict_path': None
+    }
+    
+    # 默认规则设置
+    RULES = {
+        'number_patterns': ['(?<!\\d)\\d{5}(?!\\d)', '\\d{6}(?!\\d)'],
+        'custom_patterns': [],
+        'keywords': ['等车', '车车', '约吗'],
+        'exclude_patterns': ['\\d+\\s*[=＝]\\s*\\d+', '^\\d+[=＝]', '[=＝]\\d+$']
+    }
+    
+    CROP_AREA_FILE = 'last_crop_area.txt'
+    
+    # 创建配置文件
+    try:
+        config_content = f"""# 监控设置
+MONITOR_SETTINGS = {repr(MONITOR_SETTINGS)}
+
+# OCR设置
+OCR_SETTINGS = {repr(OCR_SETTINGS)}
+
+# 自义定规则设置
+RULES = {repr(RULES)}
+
+CROP_AREA_FILE = 'last_crop_area.txt'"""
+        
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            f.write(config_content)
+        print(f"已创建默认配置文件: {CONFIG_FILE}")
+    except Exception as e:
+        print(f"创建配置文件失败: {str(e)}")
 
 # 导入自定义模块
 from utils import Logger, clean_memory, get_system_info, format_bytes
@@ -77,11 +158,16 @@ class MonitorApp:
         
         # 初始化模块
         self.window_capture = WindowCapture()
-        self.window_capture.crop_area_file = CROP_AREA_FILE
+        self.window_capture.crop_area_file = CROP_AREA_FILE_PATH  # 使用绝对路径
         # 设置捕获模式
         self.window_capture.use_background_capture = MONITOR_SETTINGS.get('use_background_capture', True)
         self.text_analyzer = TextAnalyzer(RULES)
-        self.ocr_processor = OCRProcessor(OCR_SETTINGS, MONITOR_SETTINGS['confidence_threshold'])
+        self.ocr_processor = OCRProcessor(
+            OCR_SETTINGS,
+            MONITOR_SETTINGS['confidence_threshold'],
+            MONITOR_SETTINGS.get('memory_threshold', 1800),  # 内存阈值，默认1800MB
+            MONITOR_SETTINGS.get('auto_reset_enabled', True)  # 是否启用自动内存重置
+        )
         
         # 初始化变量
         self.monitoring = False
@@ -158,8 +244,9 @@ CPU使用率: {system_info['cpu_percent']}%
                     print("系统内存使用超过90%，正在自动清理...")
                     self.clean_memory()
                     
-                # 检查程序内存占用是否过大（超过500MB）
-                if system_info['process_memory'] > 500 * 1024 * 1024:
+                # 检查程序内存占用是否超过阈值
+                memory_threshold_bytes = MONITOR_SETTINGS.get('memory_threshold', 1800) * 1024 * 1024
+                if system_info['process_memory'] > memory_threshold_bytes:
                     print(f"程序内存占用较高: {format_bytes(system_info['process_memory'])}，正在自动清理...")
                     self.clean_memory()
                     
@@ -172,7 +259,19 @@ CPU使用率: {system_info['cpu_percent']}%
     
     def clean_memory(self):
         """主动清理内存"""
-        clean_memory()
+        print("正在清理内存...")
+        # 停止OCR引擎
+        if hasattr(self, 'ocr_processor') and self.ocr_processor:
+            self.ocr_processor.release()
+        
+        # 强制运行多次垃圾回收
+        for _ in range(3):
+            gc.collect()
+        
+        # 获取清理后的内存信息
+        system_info = get_system_info()
+        if system_info:
+            print(f"清理完成，当前内存占用: {format_bytes(system_info['process_memory'])}")
     
     def handle_exception(self, exc_type, exc_value, exc_traceback):
         """处理未捕获的异常"""
@@ -215,7 +314,7 @@ CPU使用率: {system_info['cpu_percent']}%
                 # 保存窗口标题到配置
                 MONITOR_SETTINGS['window_title'] = window_title
                 try:
-                    with open('config.py', 'r', encoding='utf-8') as f:
+                    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                         config_content = f.read()
                     
                     # 替换窗口标题
@@ -235,10 +334,10 @@ CPU使用率: {system_info['cpu_percent']}%
                                 config_content = '\n'.join(lines)
                                 break
                     
-                    with open('config.py', 'w', encoding='utf-8') as f:
+                    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                         f.write(config_content)
                         
-                    print(f"已保存窗口标题到配置文件")
+                    print(f"已保存窗口标题到配置文件: {CONFIG_FILE}")
                 except Exception as e:
                     print(f"保存窗口标题失败: {str(e)}")
                 
@@ -258,6 +357,9 @@ CPU使用率: {system_info['cpu_percent']}%
             
         self.monitoring = True
         
+        # 先清理内存再初始化OCR引擎
+        self.clean_memory()
+        
         # 初始化OCR引擎
         if not self.ocr_processor.initialize():
             self.monitoring = False
@@ -276,7 +378,17 @@ CPU使用率: {system_info['cpu_percent']}%
             # 计数器增加，定期清理一次内存
             self.loop_counter += 1
             if self.loop_counter >= self.memory_cleanup_interval:
-                gc.collect()  # 强制垃圾回收
+                # 检查内存占用
+                system_info = get_system_info()
+                if system_info and system_info['process_memory'] > MONITOR_SETTINGS.get('memory_threshold', 1800) * 1024 * 1024:
+                    print(f"程序内存占用较高: {format_bytes(system_info['process_memory'])}，正在自动清理...")
+                    self.clean_memory()
+                    # 重新初始化OCR引擎
+                    self.ocr_processor.initialize()
+                else:
+                    # 仅做一般垃圾回收
+                    gc.collect()
+                
                 self.loop_counter = 0
                 print("已自动清理内存")
                 
@@ -284,7 +396,7 @@ CPU使用率: {system_info['cpu_percent']}%
             cropped_image = self.window_capture.get_cropped_image()
             if cropped_image is None:
                 raise Exception("无法获取窗口图像")
-                
+            
             # 识别文字
             text = self.ocr_processor.recognize_text(cropped_image)
             
@@ -297,7 +409,7 @@ CPU使用率: {system_info['cpu_percent']}%
                 if message:
                     self.show_alert(message)
                     self.text_analyzer.add_alerted_message(message)
-                
+            
         except Exception as e:
             print(f"监控过程出错: {str(e)}")
             
@@ -305,8 +417,10 @@ CPU使用率: {system_info['cpu_percent']}%
             # 确保资源释放
             if 'cropped_image' in locals():
                 del cropped_image
-                
+            
+            # 确保即使发生异常也会继续循环
             if self.monitoring:
+                # 使用更长的间隔让系统有时间释放资源
                 self.root.after(int(MONITOR_SETTINGS['scan_interval'] * 1000), self.monitor_loop)
 
     def show_alert(self, message):
@@ -324,7 +438,7 @@ CPU使用率: {system_info['cpu_percent']}%
         # 释放OCR资源
         self.ocr_processor.release()
         # 主动清理内存
-        gc.collect()
+        self.clean_memory()
 
     def quit_app(self):
         """退出程序"""
@@ -338,13 +452,19 @@ CPU使用率: {system_info['cpu_percent']}%
 
     def show_settings(self):
         """显示设置对话框"""
-        settings_dialog = SettingsDialog(self.root, MONITOR_SETTINGS, OCR_SETTINGS, RULES)
+        settings_dialog = SettingsDialog(self.root, MONITOR_SETTINGS, OCR_SETTINGS, RULES, CONFIG_FILE)
         # 等待设置对话框关闭
         self.root.wait_window(settings_dialog.window)
         # 更新捕获模式
         self.window_capture.use_background_capture = MONITOR_SETTINGS.get('use_background_capture', True)
         # 更新日志最大行数
         sys.stdout.max_lines = MONITOR_SETTINGS.get('max_log_lines', 500)
+        # 更新OCR处理器设置
+        self.ocr_processor.update_settings(
+            memory_threshold=MONITOR_SETTINGS.get('memory_threshold', 1800),
+            auto_reset_enabled=MONITOR_SETTINGS.get('auto_reset_enabled', True)
+        )
+        print(f"设置已更新，内存阈值: {MONITOR_SETTINGS.get('memory_threshold', 1800)}MB, 自动重置: {'开启' if MONITOR_SETTINGS.get('auto_reset_enabled', True) else '关闭'}")
 
     def show_alert_history(self):
         """显示已识别记录对话框"""

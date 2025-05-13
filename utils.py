@@ -46,30 +46,51 @@ def format_bytes(bytes_value):
     return f"{bytes_value:.2f}PB"
 
 def clean_memory():
-    """主动清理内存"""
-    # 存储监控前的内存使用情况
-    try:
-        process = psutil.Process()
-        before_memory = process.memory_info().rss
-        
-        # 执行清理
+    """清理内存"""
+    print("执行内存清理...")
+    
+    # 强制Python垃圾回收
+    for _ in range(3):
         gc.collect()
-        
-        # 清理后的内存使用情况
-        after_memory = process.memory_info().rss
-        saved = before_memory - after_memory
-        
-        if saved > 0:
-            print(f"内存清理完成: 释放了 {format_bytes(saved)} 内存")
+    
+    # 尝试清理numpy缓存
+    try:
+        import numpy as np
+        np.clear_cache()
+    except:
+        pass
+    
+    # 尝试清理paddle缓存
+    try:
+        import paddle
+        paddle.device.cuda.empty_cache()
+        if hasattr(paddle, 'fluid') and hasattr(paddle.fluid, 'core') and hasattr(paddle.fluid.core, 'garbage_collect_memory'):
+            paddle.fluid.core.garbage_collect_memory()
+    except:
+        pass
+    
+    # 尝试请求操作系统回收内存
+    try:
+        import ctypes
+        if sys.platform == 'win32':
+            # Windows平台
+            ctypes.windll.kernel32.SetProcessWorkingSetSize(-1, -1)
         else:
-            print("内存清理完成")
-            
-        return saved
-    except Exception as e:
-        print(f"清理内存时出错: {str(e)}")
-        gc.collect()  # 仍然尝试清理
-        print("已清理内存")
-        return 0
+            # Linux/Unix平台
+            import resource
+            resource.setrlimit(resource.RLIMIT_AS, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+    except:
+        pass
+    
+    # 输出清理后内存
+    try:
+        info = get_system_info()
+        if info:
+            print(f"清理后内存占用: {format_bytes(info['process_memory'])}")
+    except:
+        pass
+    
+    print("内存清理完成")
 
 def get_system_info():
     """获取系统资源信息"""

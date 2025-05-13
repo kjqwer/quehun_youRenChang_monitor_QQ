@@ -1,11 +1,13 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import re
+import os
+import sys
 
 class SettingsDialog:
     """设置对话框类，用于配置程序的各项参数"""
     
-    def __init__(self, parent, monitor_settings, ocr_settings, rules):
+    def __init__(self, parent, monitor_settings, ocr_settings, rules, config_file=None):
         """初始化设置对话框
         
         Args:
@@ -13,10 +15,14 @@ class SettingsDialog:
             monitor_settings: 监控设置字典
             ocr_settings: OCR设置字典
             rules: 规则设置字典
+            config_file: 配置文件路径，如果为None则使用当前目录下的config.py
         """
         self.window = tk.Toplevel(parent)
         self.window.title("设置")
         self.window.geometry("600x650")  # 窗口大小
+        
+        # 保存配置文件路径
+        self.config_file = config_file if config_file else 'config.py'
         
         # 保存原始设置
         self.monitor_settings = monitor_settings
@@ -42,16 +48,16 @@ class SettingsDialog:
         self.notebook.add(self.basic_frame, text="基本设置")
         
         # 扫描间隔设置
-        ttk.Label(self.basic_frame, text="扫描间隔(秒):").pack(pady=5)
+        ttk.Label(self.basic_frame, text="扫描间隔 (秒):").pack(pady=5)
         self.scan_interval = ttk.Entry(self.basic_frame)
-        self.scan_interval.insert(0, str(self.monitor_settings['scan_interval']))
+        self.scan_interval.insert(0, str(self.monitor_settings.get('scan_interval', 1.0)))
         self.scan_interval.pack(pady=5)
         
         # 置信度阈值设置
-        ttk.Label(self.basic_frame, text="OCR置信度阈值(0-1):").pack(pady=5)
-        self.confidence = ttk.Entry(self.basic_frame)
-        self.confidence.insert(0, str(self.monitor_settings['confidence_threshold']))
-        self.confidence.pack(pady=5)
+        ttk.Label(self.basic_frame, text="置信度阈值 (0-1):").pack(pady=5)
+        self.confidence_threshold = ttk.Entry(self.basic_frame)
+        self.confidence_threshold.insert(0, str(self.monitor_settings.get('confidence_threshold', 0.8)))
+        self.confidence_threshold.pack(pady=5)
         
         # 捕获模式设置
         ttk.Label(self.basic_frame, text="捕获模式:").pack(pady=5)
@@ -64,12 +70,24 @@ class SettingsDialog:
         ttk.Radiobutton(self.capture_mode_frame, text="前台模式（需要窗口置顶）", 
                         variable=self.use_background_capture_var, value=False).pack(anchor=tk.W)
         
-        # 性能设置
-        ttk.Label(self.basic_frame, text="内存清理间隔(次数):").pack(pady=5)
+        # 内存清理间隔设置
+        ttk.Label(self.basic_frame, text="内存清理间隔 (次数):").pack(pady=5)
         self.memory_cleanup_interval = ttk.Entry(self.basic_frame)
         self.memory_cleanup_interval.insert(0, str(self.monitor_settings.get('memory_cleanup_interval', 30)))
         self.memory_cleanup_interval.pack(pady=5)
         
+        # 内存阈值设置
+        ttk.Label(self.basic_frame, text="内存阈值 (MB):").pack(pady=5)
+        self.memory_threshold = ttk.Entry(self.basic_frame)
+        self.memory_threshold.insert(0, str(self.monitor_settings.get('memory_threshold', 1800)))
+        self.memory_threshold.pack(pady=5)
+        
+        # 自动内存重置设置
+        self.auto_reset_enabled_var = tk.BooleanVar(value=self.monitor_settings.get('auto_reset_enabled', True))
+        ttk.Checkbutton(self.basic_frame, text="启用自动内存重置", 
+                      variable=self.auto_reset_enabled_var).pack(pady=5)
+        
+        # 日志最大行数设置
         ttk.Label(self.basic_frame, text="日志最大行数:").pack(pady=5)
         self.max_log_lines = ttk.Entry(self.basic_frame)
         self.max_log_lines.insert(0, str(self.monitor_settings.get('max_log_lines', 500)))
@@ -224,42 +242,56 @@ class SettingsDialog:
         if selection:
             listbox.delete(selection)
 
-    def save_settings(self):
-        """保存设置"""
-        try:
-            # 更新MONITOR_SETTINGS
-            self.monitor_settings['scan_interval'] = float(self.scan_interval.get())
-            self.monitor_settings['confidence_threshold'] = float(self.confidence.get())
-            self.monitor_settings['memory_cleanup_interval'] = int(self.memory_cleanup_interval.get())
-            self.monitor_settings['max_log_lines'] = int(self.max_log_lines.get())
-            self.monitor_settings['use_background_capture'] = self.use_background_capture_var.get()
-            
-            # 更新OCR_SETTINGS
-            self.ocr_settings['use_gpu'] = self.use_gpu_var.get()
-            self.ocr_settings['enable_mkldnn'] = self.enable_mkldnn_var.get()
-            
-            # 更新RULES
-            self.rules['number_patterns'] = list(self.number_patterns_list.get(0, tk.END))
-            self.rules['custom_patterns'] = list(self.custom_patterns_list.get(0, tk.END))
-            self.rules['exclude_patterns'] = list(self.exclude_patterns_list.get(0, tk.END))
-            self.rules['keywords'] = list(self.keywords_list.get(0, tk.END))
-            
-            # 保存到配置文件
-            config_content = f"""# 监控设置
+    def _save_to_config_file(self):
+        """保存设置到配置文件"""
+        config_content = f"""# 监控设置
 MONITOR_SETTINGS = {repr(self.monitor_settings)}
 
 # OCR设置
 OCR_SETTINGS = {repr(self.ocr_settings)}
 
-# 规则设置
+# 自义定规则设置
 RULES = {repr(self.rules)}
 
-# 保存裁剪区域的文件
 CROP_AREA_FILE = 'last_crop_area.txt'"""
-            
-            with open('config.py', 'w', encoding='utf-8') as f:
+        
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
                 f.write(config_content)
+            print(f"配置已保存到: {self.config_file}")
+        except Exception as e:
+            print(f"保存配置文件失败: {str(e)}")
+            raise
+
+    def save_settings(self):
+        """保存设置"""
+        try:
+            # 基本设置
+            self.monitor_settings['scan_interval'] = float(self.scan_interval.get())
+            self.monitor_settings['confidence_threshold'] = float(self.confidence_threshold.get())
+            self.monitor_settings['memory_cleanup_interval'] = int(self.memory_cleanup_interval.get())
+            self.monitor_settings['max_log_lines'] = int(self.max_log_lines.get())
+            self.monitor_settings['memory_threshold'] = int(self.memory_threshold.get())
+            self.monitor_settings['auto_reset_enabled'] = self.auto_reset_enabled_var.get()
+            self.monitor_settings['use_background_capture'] = self.use_background_capture_var.get()
             
+            # OCR设置
+            self.ocr_settings['use_gpu'] = self.use_gpu_var.get()
+            self.ocr_settings['enable_mkldnn'] = self.enable_mkldnn_var.get()
+            
+            # 规则设置 - 从各个列表框获取数据
+            self.rules['keywords'] = list(self.keywords_list.get(0, tk.END))
+            if hasattr(self, 'number_patterns_list'):
+                self.rules['number_patterns'] = list(self.number_patterns_list.get(0, tk.END))
+            if hasattr(self, 'custom_patterns_list'):
+                self.rules['custom_patterns'] = list(self.custom_patterns_list.get(0, tk.END))
+            if hasattr(self, 'exclude_patterns_list'):
+                self.rules['exclude_patterns'] = list(self.exclude_patterns_list.get(0, tk.END))
+            
+            # 保存到配置文件
+            self._save_to_config_file()
+            
+            self.window.destroy()
             messagebox.showinfo("成功", "设置已保存")
             
             # 询问是否需要重启监控
@@ -271,7 +303,5 @@ CROP_AREA_FILE = 'last_crop_area.txt'"""
                         parent_app.ocr_processor.release()
                     parent_app.start_monitor()
             
-            self.window.destroy()
-            
-        except ValueError as e:
-            messagebox.showerror("错误", "请输入有效的数值") 
+        except Exception as e:
+            messagebox.showerror("错误", f"保存设置失败: {str(e)}") 
