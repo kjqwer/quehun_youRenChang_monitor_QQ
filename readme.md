@@ -149,7 +149,7 @@ python -m PyInstaller --name "车牌监控" --add-data "config.py;." --add-data 
 - 在前台模式下，被监控的窗口需要保持在最前面（可以使用"切换窗口置顶"按钮）
 - 首次运行时需要下载OCR模型文件
 - 建议使用虚拟环境运行程序
-- GPU设置支持需要修改环境重新打包（改为安装paddlepaddle-gpu）
+- GPU设置支持需要修改环境重新打包（改为安装paddlepaddle-gpu，具体安装方法见https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/install/pip/windows-pip.html）
 - QQ高版本需要禁止GPU，不然不能监控（~~天知道为什么一个聊天软件需要GPU~~），可以使用快捷方式修改如下图（前面是你的QQ路径）（"E:\Program Files (x86)\Tencent\QQNT\QQ.exe" --disable-gpu）
 - ![QQ](运行图片/qq设置.png)
 
